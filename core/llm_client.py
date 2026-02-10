@@ -107,9 +107,10 @@ class LLMClient:
         ]
         try:
             resp = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=0.3,
+                model=self.model,  # 大模型名称
+                messages=messages,  # 提示词
+                temperature=0.5,  # 温度，范围0-2，越小越 deterministic
+                max_tokens=10000,  # 默认最大返回 10000 个token
                 # response_format={'type': 'json_object'}
             )
             content = resp.choices[0].message.content.strip()
@@ -169,7 +170,12 @@ class LLMClient:
         ]
 
         try:
-            resp = self.client.chat.completions.create(model=self.model, messages=messages, temperature=0.3)
+            resp = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.3,
+                max_tokens=10000
+            )
             content = resp.choices[0].message.content.strip()
             print(f"评审专家输出：{content}")
 
