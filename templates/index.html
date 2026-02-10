@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<meta name="referrer" content="strict-origin-when-cross-origin">
+		<title>AI 测试用例生成器</title>
+		<link rel="icon" href="../static/layui/img/logo.png" type="image/png">
+		<link rel="stylesheet" href="../static/layui/css/layui.css">
+		<style>
+			/* 让分页永远在右下角 */
+			.layui-table-page {
+				text-align: right;
+			}
+
+			/* 主题切换器样式 - 修改位置 */
+			.theme-switcher {
+				position: absolute;
+				top: 20px;
+				right: 20px;
+				z-index: 1000;
+				background: rgba(255, 255, 255, 0.9);
+				padding: 10px 10px;
+				border-radius: 20px;
+				box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+			}
+
+			.theme-switcher label {
+				margin-right: 10px;
+				font-weight: bold;
+			}
+
+			.theme-option {
+				display: inline-block;
+				width: 20px;
+				height: 20px;
+				margin: 0 5px;
+				border-radius: 50%;
+				cursor: pointer;
+				border: 2px solid #fff;
+				box-shadow: 0 0 3px rgba(0, 0, 0, 0.3);
+			}
+
+			.theme-option.active {
+				box-shadow: 0 0 0 2px #fff, 0 0 0 4px #000;
+			}
+
+			/* 默认主题 */
+			body.default-theme {
+				background: linear-gradient(135deg, #f5f7fa 0%, #e4edf5 100%);
+				color: #333;
+			}
+			
+			/* 深色主题 */
+			body.dark-theme {
+				background: linear-gradient(135deg, #309da7 0%, #3c978e 100%);
+				color: #0000ff;
+			}
+			
+			.blue-theme .layui-btn {
+				background-color: #00007f;
+			}
+			
+			.blue-theme .layui-table th {
+				background-color: #00007f;
+				color: white;
+			}
+			
+			/* 蓝色主题 */
+			body.blue-theme {
+				background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+				color: #0d47a1;
+			}
+
+			.blue-theme .layui-btn {
+				background-color: #2196f3;
+			}
+
+			.blue-theme .layui-table th {
+				background-color: #42a5f5;
+				color: white;
+			}
+
+			/* 绿色主题 */
+			body.green-theme {
+				background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+				color: #1b5e20;
+			}
+
+			.green-theme .layui-btn {
+				background-color: #4caf50;
+			}
+
+			.green-theme .layui-table th {
+				background-color: #66bb6a;
+				color: white;
+			}
+
+			/* 响应式调整 */
+			@media (max-width: 768px) {
+				.theme-switcher {
+					position: relative;
+					top: 0;
+					right: 0;
+					margin: 15px auto;
+					text-align: center;
+				}
+
+				/* 表格高度自适应 */
+				#caseTable {
+					height: 70vh !important;
+				}
+
+				/* 表单元素适配 */
+				.layui-input-block {
+					margin-left: 0;
+					width: 100%;
+				}
+
+				.layui-form-label {
+					width: 100%;
+					text-align: left;
+					margin-bottom: 5px;
+				}
+
+				/* 按钮适配 */
+				.layui-btn {
+					width: 100%;
+					margin-top: 10px;
+					margin-bottom: 10px;
+				}
+			}
+
+			@media (max-width: 480px) {
+				/* 更小屏幕的适配 */
+				.layui-container {
+					padding: 0 10px;
+				}
+
+				#caseTable {
+					height: 60vh !important;
+				}
+
+				/* 表格列宽适配 */
+				.layui-table th,
+				.layui-table td {
+					font-size: 12px;
+					padding: 6px;
+				}
+			}
+		</style>
+	</head>
+	<body class="default-theme">
+		<!-- 主题切换器 - 位置已调整 -->
+		<div class="theme-switcher">
+			<label><i class="layui-icon layui-icon-theme"></i> </label>
+			<div class="theme-option default-theme active" data-theme="default-theme" title="默认主题"></div>
+			<div class="theme-option dark-theme" data-theme="dark-theme" title="深色主题"></div>
+			<div class="theme-option blue-theme" data-theme="blue-theme" title="蓝色主题"></div>
+			<div class="theme-option green-theme" data-theme="green-theme" title="绿色主题"></div>
+		</div>
+
+		<div class="layui-container" style="margin-top:30px">
+			<h2 style="text-align:center;">AI 测试用例生成器</h2>
+
+			<!-- 上传区 -->
+			<form class="layui-form" id="uploadForm" enctype="multipart/form-data">
+					<div class="layui-form-item">
+						<label class="layui-form-label">需求输入</label>
+						<div class="layui-input-block">
+							<button type="button" class="layui-btn" id="inputDemandBtn">
+								<i class="layui-icon layui-icon-edit"></i> 手动输入需求
+							</button>
+							<button type="button" class="layui-btn layui-btn-normal" id="uploadFileBtn">
+								<i class="layui-icon layui-icon-upload"></i> 上传需求文件
+							</button>
+							<button class="layui-btn layui-btn-lg layui-btn-danger" lay-submit lay-filter="formDemo">
+								<i class="layui-icon layui-icon-magic"></i> 生成测试用例
+							</button>
+							<input type="file" name="file" id="fileInput" accept=".png,.jpg,.pdf,.doc,.docx,.md" class="layui-hide">
+							<input type="hidden" name="demand_text" id="demandTextInput">
+						</div>
+					</div>
+
+					<div class="layui-form-item">
+						<label class="layui-form-label">导出格式</label>
+						<div class="layui-input-block">
+							<select name="format">
+								<option value="json">JSON</option>
+								<option value="xlsx">Excel</option>
+								<option value="csv">CSV</option>
+								<option value="md">Markdown</option>
+							</select>
+						</div>
+					</div>
+					<div class="layui-form-item">
+						<label class="layui-form-label">用例提示词</label>
+						<div class="layui-input-block">
+							<button type="button" class="layui-btn layui-btn-sm" id="promptInputBtn">
+								<i class="layui-icon layui-icon-edit"></i> 设置用例提示词
+							</button>
+							<input type="hidden" name="prompt" id="promptInput">
+							<span id="promptPreview" class="layui-form-mid layui-word-aux">未设置，使用默认提示词</span>
+						</div>
+					</div>
+					
+					<div class="layui-form-item">
+						<label class="layui-form-label">用例数量</label>
+						<div class="layui-input-block">
+							<input type="number" name="test_case_count" placeholder="选填，留空不限制数量" class="layui-input">
+						</div>
+					</div>
+					
+					<div class="layui-form-item">
+						<label class="layui-form-label">启用评审</label>
+						<div class="layui-input-block">
+							<input type="checkbox" name="enable_review" lay-skin="switch" lay-text="开启|关闭" checked id="enableReviewSwitch">
+						</div>
+					</div>
+					
+					<div class="layui-form-item">
+						<label class="layui-form-label">评审提示词</label>
+						<div class="layui-input-block">
+							<button type="button" class="layui-btn layui-btn-sm" id="reviewPromptInputBtn">
+								<i class="layui-icon layui-icon-edit"></i> 设置评审提示词
+							</button>
+							<input type="hidden" name="review_prompt" id="reviewPromptInput">
+							<span id="reviewPromptPreview" class="layui-form-mid layui-word-aux">未设置，使用默认评审提示词</span>
+						</div>
+					</div>
+				</form>
+
+			<!-- 结果区 -->
+			<div id="resultPanel" class="layui-hide">
+				<div class="layui-row" style="margin:15px 0;">
+					<div class="layui-col-md6">
+						<span id="totalInfo">共 <strong id="totalCount">0</strong> 条用例</span>
+					</div>
+					<div class="layui-col-md6" style="text-align:right;">
+						<a id="downloadBtn" class="layui-btn layui-btn-primary">下载完整文件</a>
+					</div>
+				</div>
+
+				<!-- 表格 -->
+				<table id="caseTable" lay-filter="caseTable"></table>
+			</div>
+		</div>
+
+		<script src="../static/layui/layui.js"></script>
+		<script>
+			layui.use(['form', 'table', 'jquery'], function() {
+				var form = layui.form,
+					table = layui.table,
+					$ = layui.jquery;
+
+				var layer = layui.layer;
+
+				// 全局变量保存 task_id
+				var currentTaskId = '';
+
+				// 主题切换功能
+				$('.theme-option').click(function() {
+					var theme = $(this).data('theme');
+
+					// 移除所有主题类
+					$('body').removeClass('default-theme dark-theme blue-theme green-theme');
+
+					// 添加当前选中的主题类
+					$('body').addClass(theme);
+
+					// 更新活动状态
+					$('.theme-option').removeClass('active');
+					$(this).addClass('active');
+
+					// 保存主题选择到localStorage
+					localStorage.setItem('selectedTheme', theme);
+				});
+
+				// 页面加载时恢复主题
+				$(document).ready(function() {
+					var savedTheme = localStorage.getItem('selectedTheme');
+					if (savedTheme) {
+						$('body').removeClass('default-theme dark-theme blue-theme green-theme');
+						$('body').addClass(savedTheme);
+						$('.theme-option').removeClass('active');
+						$(`.theme-option[data-theme="${savedTheme}"]`).addClass('active');
+					}
+
+					// 检查评审模型配置状态
+					$.ajax({
+						url: '/api/check_review_config',
+						type: 'GET',
+						success: function(res) {
+							if (res.code === 1) {
+								// 未配置评审模型，关闭评审开关
+								$('input[name="enable_review"]').prop('checked', false);
+								form.render('checkbox');
+								layer.msg('未配置评审模型，已自动关闭评审功能', {icon: 0});
+							}
+						}
+					});
+
+					// 监听评审开关变化
+					form.on('switch(enableReviewSwitch)', function(data) {
+						if (data.elem.checked) {
+							// 用户尝试开启评审，检查模型配置
+							$.ajax({
+								url: '/api/check_review_config',
+								type: 'GET',
+								success: function(res) {
+									if (res.code === 1) {
+										// 未配置评审模型，阻止开启
+										$(data.elem).prop('checked', false);
+										form.render('checkbox');
+										layer.msg('请先配置评审专家模型信息！', {icon: 2});
+									}
+								}
+							});
+						}
+					});
+				});
+
+				// 窗口大小改变时的响应逻辑
+				$(window).resize(function() {
+					// 调整主题切换器位置
+					if (window.innerWidth <= 768) {
+						$('.theme-switcher').css({
+							'position': 'relative',
+							'top': '0',
+							'right': '0',
+							'margin': '15px auto',
+							'text-align': 'center'
+						});
+					} else {
+						$('.theme-switcher').css({
+							'position': 'absolute',
+							'top': '20px',
+							'right': '20px',
+							'margin': '0',
+							'text-align': 'left'
+						});
+					}
+
+					// 重新渲染表格
+					if (currentTaskId) {
+						// 销毁旧表格
+						table.render({ elem: '#caseTable', done: function() {} });
+						// 重新初始化表格
+						initTable();
+					}
+				});
+
+				// 手动输入需求弹窗
+				$('#inputDemandBtn').click(function() {
+					layer.open({
+						type: 1,
+						title: '手动输入需求',
+						area: ['80%', '70%'],
+						content: '<div style="padding: 20px;"><textarea id="demandText" placeholder="请输入详细的需求描述" style="width: 100%; height: 400px; padding: 10px; border: 1px solid #e6e6e6; border-radius: 4px; resize: none;"></textarea></div>',
+						btn: ['确认', '取消'],
+						btn1: function(index, layero) {
+							var demandText = $('#demandText').val();
+							if (demandText) {
+								$('#demandTextInput').val(demandText);
+								$('#fileInput').val('');
+								layer.msg('需求已设置', {icon: 1});
+							} else {
+								layer.msg('需求不能为空', {icon: 2});
+								return false;
+							}
+							layer.close(index);
+						}
+					});
+				});
+
+				// 上传文件按钮点击事件
+				$('#uploadFileBtn').click(function() {
+					$('#fileInput').click();
+				});
+
+				// 文件选择事件
+				$('#fileInput').change(function(e) {
+					if (e.target.files.length > 0) {
+						var fileName = e.target.files[0].name;
+						$('#demandTextInput').val('');
+						layer.msg('已选择文件: ' + fileName, {icon: 1});
+					}
+				});
+
+				// 设置提示词弹窗
+				$('#promptInputBtn').click(function() {
+					var currentPrompt = $('#promptInput').val();
+					layer.open({
+						type: 1,
+						title: '设置提示词',
+						area: ['80%', '50%'],
+						content: '<div style="padding: 20px;"><textarea id="promptText" placeholder="请输入提示词，留空使用默认提示词" style="width: 100%; height: 250px; padding: 10px; border: 1px solid #e6e6e6; border-radius: 4px; resize: none;">' + (currentPrompt || '') + '</textarea></div>',
+						btn: ['确认', '取消'],
+						btn1: function(index, layero) {
+							var promptText = $('#promptText').val();
+							$('#promptInput').val(promptText);
+							if (promptText) {
+								$('#promptPreview').text('已设置自定义提示词');
+							} else {
+								$('#promptPreview').text('未设置，使用默认提示词');
+							}
+							layer.close(index);
+						}
+					});
+				});
+
+				// 设置评审提示词弹窗
+				$('#reviewPromptInputBtn').click(function() {
+					var currentReviewPrompt = $('#reviewPromptInput').val();
+					layer.open({
+						type: 1,
+						title: '设置评审提示词',
+						area: ['80%', '50%'],
+						content: '<div style="padding: 20px;"><textarea id="reviewPromptText" placeholder="请输入评审提示词，留空使用默认评审提示词" style="width: 100%; height: 250px; padding: 10px; border: 1px solid #e6e6e6; border-radius: 4px; resize: none;">' + (currentReviewPrompt || '') + '</textarea></div>',
+						btn: ['确认', '取消'],
+						btn1: function(index, layero) {
+							var reviewPromptText = $('#reviewPromptText').val();
+							$('#reviewPromptInput').val(reviewPromptText);
+							if (reviewPromptText) {
+								$('#reviewPromptPreview').text('已设置自定义评审提示词');
+							} else {
+								$('#reviewPromptPreview').text('未设置，使用默认评审提示词');
+							}
+							layer.close(index);
+						}
+					});
+				});
+
+				form.on('submit(formDemo)', function() {
+					// 验证需求输入
+					var demandText = $('#demandTextInput').val();
+					var fileInput = $('#fileInput')[0].files.length;
+					
+					if (!demandText && !fileInput) {
+						layer.msg('请选择需求文件或手动输入需求', {icon: 2});
+						return false;
+					}
+
+					var formData = new FormData(document.getElementById('uploadForm'));
+
+					// 显示loading提示
+					var loadingIndex = layer.load(2);
+
+					$.ajax({
+						url: '/api/generate',
+						type: 'POST',
+						data: formData,
+						processData: false,
+						contentType: false,
+						success: function(res) {
+							// 关闭loading
+							layer.close(loadingIndex);
+
+							if (res.code === 0) {
+								currentTaskId = res.task_id;
+								initTable(); // 初始化 server 模式表格
+								$('#totalCount').text(res.count);
+								$('#resultPanel').removeClass('layui-hide');
+								$('#downloadBtn').attr('href', res.url) // 后端返回的完整文件地址
+									.attr('download', '') // 强制下载
+									.attr('target', '_blank'); // 防止拦截下载
+							} else {
+								layer.msg(res.msg, {
+									icon: 2
+								});
+							}
+						},
+						error: function() {
+							// 请求失败时也关闭loading
+							layer.close(loadingIndex);
+							layer.msg('请求失败，请重试', {
+								icon: 2
+							});
+						}
+					});
+					return false;
+				});
+
+				// 添加下载按钮点击事件处理
+				$(document).on('click', '#downloadBtn', function() {
+					var downloadUrl = $(this).attr('href');
+					if (!downloadUrl) {
+						layer.msg('下载链接为空，请重新生成用例', {
+							icon: 2
+						});
+						return false;
+					}
+				});
+
+				// 初始化 server 模式表格
+					function initTable() {
+						// 根据屏幕尺寸设置表格高度
+						var tableHeight = 520;
+						if (window.innerWidth <= 768) {
+							tableHeight = '70vh';
+						} else if (window.innerWidth <= 480) {
+							tableHeight = '60vh';
+						}
+
+						console.log('初始化表格，task_id:', currentTaskId);
+
+						table.render({
+							elem: '#caseTable',
+							url: '/api/page/' + currentTaskId,
+							method: 'get',
+							height: tableHeight,
+							page: true,
+							limits: [10, 20, 50],
+							limit: 10,
+							cols: [
+								[
+									{
+										field: '用例编号',
+										title: '用例编号',
+										width: 120
+									},
+									{
+										field: '用例标题',
+										title: '用例标题',
+										minWidth: 200,
+										templet: function(d) {
+											return String(d['用例标题'] || '').replace(/\\n/g, '<br>').replace(/\n/g, '<br>');
+										}
+									},
+									{
+										field: '前置条件',
+										title: '前置条件',
+										minWidth: 200,
+										templet: function(d) {
+											return String(d['前置条件'] || '').replace(/\\n/g, '<br>').replace(/\n/g, '<br>');
+										}
+									},
+									{
+										field: '操作步骤',
+										title: '操作步骤',
+										minWidth: 250,
+										templet: function(d) {
+											var steps = d['操作步骤'];
+											if (Array.isArray(steps)) {
+												return steps.map(function(step, index) {
+													return (index + 1) + '. ' + step;
+												}).join('<br>');
+											} else {
+												return String(steps).replace(/\\n/g, '<br>').replace(/\n/g, '<br>');
+											}
+										}
+									},
+									{
+										field: '预期结果',
+										title: '预期结果',
+										minWidth: 250,
+										templet: function(d) {
+											return String(d['预期结果'] || '').replace(/\\n/g, '<br>').replace(/\n/g, '<br>');
+										}
+									},
+									{
+										field: '优先级',
+										title: '优先级',
+										width: 90
+									}
+								]
+							],
+							skin: 'line',
+							even: true,
+							parseData: function(d) {
+								console.log('收到分页数据:', d);
+								return {
+									code: d.code,
+									count: d.count,
+									data: d.data
+								};
+							}
+						});
+					}
+			});
+		</script>
+	</body>
+</html>
