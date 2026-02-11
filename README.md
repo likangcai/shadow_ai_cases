@@ -17,11 +17,11 @@ AI 测试用例生成器是一个基于大语言模型的测试用例自动生�
 
 ## 技术栈
 
-- **后端**：Python 3.x, Flask
+- **后端**：Python 3.x, FastAPI, Uvicorn
 - **前端**：HTML, CSS, JavaScript, LayUI
-- **大语言模型**：OpenAI API
+- **大语言模型**：OpenAI API, LiteLLM
 - **数据处理**：Pandas, OpenPyXL
-- **文件处理**：Pillow, PyMuPDF, python-docx
+- **文件处理**：Pillow, PyMuPDF, python-docx, cnocr
 - **数据库**：SQLite
 - **日志**：Loguru
 
@@ -34,12 +34,17 @@ AI 测试用例生成器是一个基于大语言模型的测试用例自动生�
 git clone https://gitee.com/yingzi_shadow/shadow_ai_cases.git
 cd Shadow_AI_Cases
 
+# 方法一：使用已配置的虚拟环境（推荐）
+# Windows
+D:\ENV\aitcg\Scripts\activate
+
+# 方法二：创建新的虚拟环境
 # 创建虚拟环境
 python -m venv venv
 
 # 激活虚拟环境
 # Windows
-env\Scripts\activate
+venv\Scripts\activate
 # macOS/Linux
 source venv/bin/activate
 
@@ -71,13 +76,16 @@ llm_review:
 
 ```bash
 # 启动开发服务器
-python app.py
+python main.py
 
-# 或使用其他端口
-python app.py --port 5001
+# 或使用uvicorn直接启动
+uvicorn main:app --host 0.0.0.0 --port 5002 --reload
+
+# 使用其他端口
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-服务启动后，访问 `http://localhost:5001` 即可使用。
+服务启动后，访问 `http://localhost:5002` 即可使用。
 
 ## 配置说明
 
@@ -92,9 +100,8 @@ python app.py --port 5001
 
 | 环境变量 | 说明 | 默认值 |
 |---------|------|-------|
-| FLASK_APP | Flask应用入口 | app.py |
-| FLASK_ENV | 运行环境 | development |
-| PORT | 服务端口 | 5001 |
+| PORT | 服务端口 | 5002 |
+| HOST | 服务主机 | 0.0.0.0 |
 
 ## 使用方法
 
@@ -131,14 +138,16 @@ python app.py --port 5001
 
 ```
 Shadow_AI_Cases/
-├── app.py              # 主应用文件
+├── main.py             # FastAPI主应用文件
 ├── config.yaml         # 配置文件
 ├── requirements.txt    # 依赖文件
+├── db_schema.sql       # 数据库表结构
+├── data.db             # SQLite数据库文件
 ├── core/               # 核心功能模块
-│   ├── database.py     # 数据库操作
+│   ├── database.py     # SQLite数据库操作
 │   ├── exporter.py     # 导出功能
-│   ├── llm_client.py   # 大语言模型客户端
-│   ├── loader.py       # 文件加载器
+│   ├── llm_client.py   # LLM客户端（支持多种模型）
+│   ├── loader.py       # 文件加载器（支持OCR）
 │   ├── logs.py         # 日志配置
 │   └── paths.py        # 路径管理
 ├── static/             # 静态文件
@@ -147,7 +156,8 @@ Shadow_AI_Cases/
 │   └── upload/         # 上传文件
 ├── templates/          # 模板文件
 │   └── index.html      # 首页模板
-└── logs/               # 日志文件
+├── logs/               # 日志文件
+└── __pycache__/        # Python缓存文件
 ```
 
 ## API 文档
@@ -262,6 +272,31 @@ Shadow_AI_Cases/
 - 刷新页面尝试
 - 清除浏览器缓存
 - 检查浏览器控制台是否有错误信息
+
+### 5. 服务启动失败
+
+- **端口占用**：检查 5002 端口是否被占用，可使用其他端口启动
+- **依赖缺失**：确保使用正确的虚拟环境（推荐使用 `D:\ENV\aitcg`）
+- **模块导入错误**：确保所有依赖包已正确安装
+- **权限问题**：确保有文件读写权限
+
+### 6. 虚拟环境使用
+
+**推荐使用预配置的虚拟环境**：
+```bash
+# Windows
+D:\ENV\aitcg\Scripts\activate
+
+# 启动服务
+uvicorn main:app --host 0.0.0.0 --port 5002 --reload
+```
+
+**创建新虚拟环境**：
+```bash
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+```
 
 ## 贡献指南
 

@@ -6,9 +6,11 @@
 # @FileName  : llm_client.py
 # -----------------------------
 import json
+import re
 from typing import List, Dict, Optional
 
 import openai
+from openai import AsyncOpenAI
 import yaml
 
 from core.logs import logger
@@ -53,7 +55,7 @@ class LLMClient:
         if db_config:
             # 使用数据库配置
             logger.info(f"使用数据库中的{model_type}模型配置: {db_config['provider']} - {db_config['model']}")
-            self.client = openai.OpenAI(api_key=db_config["api_key"], base_url=db_config.get("base_url"))
+            self.client = AsyncOpenAI(api_key=db_config["api_key"], base_url=db_config.get("base_url"))
             self.model = db_config["model"]
             self.cfg_path = cfg_path
             self.model_type = model_type
@@ -73,12 +75,12 @@ class LLMClient:
                 cfg = config.get("llm", {})
                 logger.warning(f"配置文件中未找到{config_key}，使用旧格式llm配置")
 
-            self.client = openai.OpenAI(api_key=cfg["api_key"], base_url=cfg.get("base_url"))
+            self.client = AsyncOpenAI(api_key=cfg["api_key"], base_url=cfg.get("base_url"))
             self.model = cfg["model"]
             self.cfg_path = cfg_path
             self.model_type = model_type
 
-    def generate_cases(self, requirement: str, custom_prompt: str = "", test_case_count: Optional[int] = None) -> List[
+    async def generate_cases(self, requirement: str, custom_prompt: str = "", test_case_count: Optional[int] = None) -> List[
         Dict]:
         """
         调用 LLM 生成测试用例
@@ -95,8 +97,9 @@ class LLMClient:
 
         # 添加测试用例数量信息
         if test_case_count:
-            prompt = prompt.replace("测试用例数量: 请生成不少于10个测试用例",
-                                    f"测试用例数量: 请生成{test_case_count}个测试用例")
+            # 使用正则表达式匹配任何数字
+            prompt = re.sub(r"测试用例数量: 请生成不少于\d+个测试用例",
+                            f"测试用例数量: 请生成{test_case_count}个测试用例", prompt)
 
         # logger.debug(f"大模型提示词：{prompt}")
         print(f"大模型提示词：{prompt}")
@@ -106,12 +109,12 @@ class LLMClient:
             {"role": "user", "content": requirement}
         ]
         try:
-            resp = self.client.chat.completions.create(
+            resp = await self.client.chat.completions.create(
                 model=self.model,  # 大模型名称
                 messages=messages,  # 提示词
-                temperature=0.5,  # 温度，范围0-2，越小越 deterministic
-                max_tokens=10000,  # 默认最大返回 10000 个token
-                # response_format={'type': 'json_object'}
+                temperature=0.5,  # 随机性，0表示最 deterministic，1表示最随机
+                max_tokens=100000,  # 最大返回字符token数
+                # response_format={'type': 'json_object'}  # 响应格式
             )
             content = resp.choices[0].message.content.strip()
             # logger.debug(f"LLM输出：{content}")
@@ -122,6 +125,7 @@ class LLMClient:
                 logger.error("LLM 返回空内容，请稍后再试")
                 raise RuntimeError("LLM 返回空内容，请稍后再试")
             return json.loads(clean_markdown_json(content))
+            # return json.loads(content)
         except openai.APIConnectionError as e:
             logger.error(e)
             raise RuntimeError(f"LLM 调用失败: 连接错误，请检查网络设置或API地址配置")
@@ -141,12 +145,13 @@ class LLMClient:
             logger.error(e)
             raise RuntimeError(f"LLM 调用失败: {str(e)}")
 
-    def review_cases(self, requirement: str, cases: List[Dict], custom_review_prompt: str = "") -> List[Dict]:
+    async def review_cases(self, requirement: str, cases: List[Dict], custom_review_prompt: str = "", test_case_count: Optional[int] = None) -> List[Dict]:
         """
         调用 LLM 评审测试用例
         :param requirement: 原始测试需求
         :param cases: 生成的测试用例列表
         :param custom_review_prompt: 自定义的评审提示词
+        :param test_case_count: 测试用例数量限制，None表示不限制
         :return: 评审通过并综合整理后的测试用例
         """
         with open(get_file_path("config.yaml"), encoding="utf-8") as f:
@@ -161,6 +166,15 @@ class LLMClient:
         prompt = prompt.replace("{requirement_text}", requirement)
         prompt = prompt.replace("{test_cases}", cases_str)
 
+        # 添加用例数量控制
+        if test_case_count:
+            # 用户指定了用例数量，要求评审后保持数量一致
+            if "保持测试用例数量与原始输入一致" not in prompt:
+                prompt += "\n\n重要提示: 请保持测试用例数量为" + str(test_case_count) + "个，不要增加或减少用例数量"
+            else:
+                prompt = re.sub(r"保持测试用例数量与原始输入一致，不要增加或减少用例数量",
+                              f"保持测试用例数量为{test_case_count}个，不要增加或减少用例数量", prompt)
+
         # logger.debug(f"评审专家提示词：{prompt}")
         print(f"评审专家提示词：{prompt}")
 
@@ -170,11 +184,12 @@ class LLMClient:
         ]
 
         try:
-            resp = self.client.chat.completions.create(
+            resp = await self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 temperature=0.3,
-                max_tokens=10000
+                max_tokens=100000,
+                # response_format={'type': 'json_object'}  # 响应格式
             )
             content = resp.choices[0].message.content.strip()
             print(f"评审专家输出：{content}")
