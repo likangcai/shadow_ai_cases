@@ -280,7 +280,8 @@ Shadow_AI_Cases/
 
 - 作者：影子
 - 邮箱：<yingzilkq@163.com>
-- 仓库地址：https://gitee.com/yingzi_shadow/shadow_ai_cases
+- Gitee仓库地址：https://gitee.com/yingzi_shadow/shadow_ai_cases
+- GitHub仓库地址：https://github.com/likangcai/shadow_ai_cases
 - 微信公众号：前行的影子
 ---
 
