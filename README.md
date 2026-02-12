@@ -14,10 +14,12 @@ AI 测试用例生成器是一个基于大语言模型的测试用例自动生�
 - **分页展示**：支持分页查看生成的测试用例
 - **自定义提示词**：支持自定义生成提示词和评审提示词
 - **可配置测试用例数量**：支持指定生成的测试用例数量
+- **高性能架构**：基于 BustAPI 框架，支持 Turbo Route 高性能路由
+- **内置服务器**：无需额外依赖，开箱即用
 
 ## 技术栈
 
-- **后端**：Python 3.x, FastAPI, Uvicorn
+- **后端**：Python 3.x, BustAPI
 - **前端**：HTML, CSS, JavaScript, LayUI
 - **大语言模型**：OpenAI API, LiteLLM
 - **数据处理**：Pandas, OpenPyXL
@@ -78,11 +80,12 @@ llm_review:
 # 启动开发服务器
 python main.py
 
-# 或使用uvicorn直接启动
-uvicorn main:app --host 0.0.0.0 --port 5002 --reload
+# BustAPI 内置服务器，无需额外依赖
+# 自动支持热重载功能
 
 # 使用其他端口
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+# 修改 main.py 中的端口配置
+app.run(host="0.0.0.0", port=8000, reload=True, debug=True)
 ```
 
 服务启动后，访问 `http://localhost:5002` 即可使用。
@@ -138,7 +141,7 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 ```
 Shadow_AI_Cases/
-├── main.py             # FastAPI主应用文件
+├── main.py             # BustAPI主应用文件
 ├── config.yaml         # 配置文件
 ├── requirements.txt    # 依赖文件
 ├── db_schema.sql       # 数据库表结构
@@ -261,6 +264,7 @@ Shadow_AI_Cases/
 - 检查评审模型是否已配置
 - 检查评审模型的 API 密钥是否正确
 - 查看日志文件获取详细错误信息
+- **建议**：使用与生成模型相同的模型，或使用更快的模型
 
 ### 3. 导出文件格式异常
 
@@ -276,7 +280,7 @@ Shadow_AI_Cases/
 ### 5. 服务启动失败
 
 - **端口占用**：检查 5002 端口是否被占用，可使用其他端口启动
-- **依赖缺失**：确保使用正确的虚拟环境（推荐使用 `D:\ENV\aitcg`）
+- **依赖缺失**：确保使用正确的虚拟环境（推荐使用）
 - **模块导入错误**：确保所有依赖包已正确安装
 - **权限问题**：确保有文件读写权限
 
@@ -288,7 +292,7 @@ Shadow_AI_Cases/
 D:\ENV\aitcg\Scripts\activate
 
 # 启动服务
-uvicorn main:app --host 0.0.0.0 --port 5002 --reload
+python main.py
 ```
 
 **创建新虚拟环境**：
@@ -297,6 +301,14 @@ python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
 ```
+
+### 7. BustAPI 特性说明
+
+- **Turbo Route**：高性能路由，用于高频访问的端点（如配置检查、分页查询）
+- **内置服务器**：无需额外依赖（如 Uvicorn），开箱即用
+- **热重载**：开发时自动重启服务器（Unix-like 系统效果更好）
+- **高性能**：基于 Rust 核心，比传统框架快 5 倍以上
+- **Flask 风格**：熟悉的装饰器语法，易于上手
 
 ## 贡献指南
 

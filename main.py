@@ -8,11 +8,9 @@
 import os
 import uuid
 import json
-from fastapi import FastAPI, Request, File, UploadFile, Form
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
-from fastapi.templating import Jinja2Templates
-from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
+
+from bustapi import BustAPI, request
+from bustapi.responses import HTMLResponse, FileResponse, Response
 
 from core.exporter import export
 from core.llm_client import LLMClient
@@ -28,65 +26,59 @@ RESULT_DIR = f"static{os.sep}result"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(RESULT_DIR, exist_ok=True)
 
-# 初始化数据库
 init_db()
 
-app = FastAPI(
-    title="AI 测试用例生成器",
-    description="基于FastAPI的测试用例自动生成工具",
-    version="1.0.1"
-)
+app = BustAPI()
 
-# 配置CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
-# 挂载静态文件
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# 静态文件路由
+@app.route("/static/<path:filepath>", methods=["GET"])
+async def serve_static(filepath: str):
+    """
+    静态文件服务
+    """
+    file_path = os.path.join("static", filepath)
+    if os.path.exists(file_path):
+        return FileResponse(path=file_path)
+    else:
+        return Response(json.dumps({"code": 1, "msg": "文件不存在"}, ensure_ascii=False), mimetype='application/json')
 
-# 配置模板
-templates = Jinja2Templates(directory="templates")
 
 llm = LLMClient()
 review_llm = LLMClient(model_type="review")
 
 
-@app.get("/", response_class=HTMLResponse)
-async def index(request: Request):
+@app.route("/", methods=["GET"])
+async def index():
     """
     首页
     """
-    return templates.TemplateResponse("index.html", {"request": request})
+    with open("templates/index.html", "r", encoding="utf-8") as f:
+        return HTMLResponse(content=f.read())
 
 
-@app.post("/api/generate")
-async def generate(
-        request: Request,
-        prompt: str = Form(default=""),
-        format: str = Form(default="json"),
-        enable_review: str = Form(default=None),
-        review_prompt: str = Form(default=""),
-        test_case_count: str = Form(default=""),
-        demand_text: str = Form(default=""),
-        file: UploadFile = File(default=None)
-):
+@app.route("/api/generate", methods=["POST"])
+async def generate():
     """
     生成用例
     """
     try:
+        prompt = request.form.get("prompt", "")
+        format = request.form.get("format", "json")
+        enable_review = request.form.get("enable_review") == "on"
+        review_prompt = request.form.get("review_prompt", "")
+        test_case_count_str = request.form.get("test_case_count", "")
+        demand_text = request.form.get("demand_text", "")
+        file = request.files.get("file")
+
         out_fmt = format
-        enable_review = enable_review == "on"
-        test_case_count = int(test_case_count) if test_case_count else None
+        test_case_count = int(test_case_count_str) if test_case_count_str else None
 
         # 只有当没有手动输入需求时，才检查文件
         if not demand_text:
             if not file:
-                return JSONResponse({"code": 1, "msg": "未上传文件，请先上传！"})
+                return Response(json.dumps({"code": 1, "msg": "未上传文件，请先上传！"}, ensure_ascii=False),
+                                mimetype='application/json')
         else:
             # 有手动输入需求时，文件可选
             pass
@@ -107,18 +99,21 @@ async def generate(
             logger.debug(f"手动输入的需求: {demand_text}")
         else:
             # 保存上传文件
-            suffix = os.path.splitext(file.filename)[1].lower()
-            tmp_name = uuid.uuid4().hex + suffix
-            tmp_path = os.path.join(UPLOAD_DIR, tmp_name)
-            logger.debug(f"上传文件保存路径: {tmp_path}")
+            if file:
+                suffix = os.path.splitext(file.filename)[1].lower()
+                tmp_name = uuid.uuid4().hex + suffix
+                tmp_path = os.path.join(UPLOAD_DIR, tmp_name)
+                logger.debug(f"上传文件保存路径: {tmp_path}")
 
-            # 保存文件内容
-            with open(tmp_path, "wb") as buffer:
-                buffer.write(await file.read())
+                # 保存文件内容
+                file.save(tmp_path)
 
-            # 解析需求
-            req_text = load_text(tmp_path)
-            print(f"需求文本:", {req_text})
+                # 解析需求
+                req_text = load_text(tmp_path)
+                # logger.debug(f"需求文本: {req_text}")
+            else:
+                return Response(json.dumps({"code": 1, "msg": "未上传文件，请先上传！"}, ensure_ascii=False),
+                                mimetype='application/json')
 
         # 记录需求字符数
         logger.info(f"需求字符数: {len(req_text)}")
@@ -126,7 +121,7 @@ async def generate(
         # 调用大模型生成用例
         cases = await llm.generate_cases(req_text, prompt, test_case_count)
         logger.info(f"生成用例完成，共 {len(cases)} 个测试用例")
-        
+
         # 记录生成用例字符数
         cases_json = json.dumps(cases, ensure_ascii=False)
         logger.info(f"生成用例字符数: {len(cases_json)}")
@@ -137,11 +132,11 @@ async def generate(
             # 调用评审专家评审用例，传递用户设置的用例数量
             reviewed_cases = await review_llm.review_cases(req_text, cases, review_prompt, test_case_count)
             logger.info(f"评审完成，生成 {len(reviewed_cases)} 个评审通过的测试用例")
-            
+
             # 记录评审用例字符数
             reviewed_cases_json = json.dumps(reviewed_cases, ensure_ascii=False)
             logger.info(f"评审用例字符数: {len(reviewed_cases_json)}")
-            
+
             final_cases = reviewed_cases
         else:
             logger.info("未启用评审功能，使用原始生成的测试用例")
@@ -156,68 +151,59 @@ async def generate(
         export(final_cases, out_fmt, out_path)
         # 只返回第一页
         first_page = final_cases[:10]
-        return JSONResponse({
+        return Response(json.dumps({
             "code": 0,
             "task_id": task_id,
             "url": f"/static/result/{task_id}.{out_fmt}",
             "count": len(final_cases),
             "data": first_page
-        })
+        }, ensure_ascii=False), mimetype='application/json')
 
     except Exception as e:
         logger.error(e)
-        return JSONResponse({"code": 2, "msg": str(e)})
+        return Response(json.dumps({"code": 2, "msg": str(e)}, ensure_ascii=False), mimetype='application/json')
 
 
 @app.get("/api/check_review_config")
-async def check_review_config():
+def check_review_config():
     """
     检查评审模型配置状态
     """
     review_model_config = get_llm_model_config("review")
     if review_model_config:
-        return JSONResponse({
+        return {
             "code": 0,
             "configured": True,
             "provider": review_model_config.get("provider", ""),
             "model": review_model_config.get("model", "")
-        })
+        }
     else:
-        return JSONResponse({
+        return {
             "code": 1,
             "configured": False,
             "msg": "检测到未配置评审模型，请先配置相关信息。"
-        })
+        }
 
 
-@app.get("/api/page/{task_id}")
-async def page(task_id: str, page: int = 1, limit: int = 10):
+@app.get("/api/page/<task_id>")
+def page(task_id: str):
     """
     分页获取用例
     """
+    page = int(request.args.get("page", 1))
+    limit = int(request.args.get("limit", 10))
+
     all_cases = PAGE_CACHE.get(task_id, [])
     start = (page - 1) * limit
     end = start + limit
-    return JSONResponse({
+    return {
         "code": 0,
         "count": len(all_cases),
         "data": all_cases[start:end]
-    })
-
-
-@app.get("/static/result/{filename}")
-async def download(filename: str):
-    """
-    下载导出文件
-    """
-    file_path = os.path.join(RESULT_DIR, filename)
-    if os.path.exists(file_path):
-        return FileResponse(path=file_path, filename=filename)
-    else:
-        return JSONResponse({"code": 1, "msg": "文件不存在"})
+    }
 
 
 if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run("main.py:app", host="0.0.0.0", port=5001, reload=True)
+    # debug=False: 生产环境应该关闭调试模式
+    # reload=True: 开发环境可以启用热重载
+    app.run(host="0.0.0.0", port=5002, reload=True, debug=False)

@@ -55,7 +55,7 @@ class LLMClient:
         if db_config:
             # 使用数据库配置
             logger.info(f"使用数据库中的{model_type}模型配置: {db_config['provider']} - {db_config['model']}")
-            self.client = AsyncOpenAI(api_key=db_config["api_key"], base_url=db_config.get("base_url"))
+            self.client = AsyncOpenAI(api_key=db_config["api_key"], base_url=db_config.get("base_url"), timeout=600.0)
             self.model = db_config["model"]
             self.cfg_path = cfg_path
             self.model_type = model_type
@@ -75,7 +75,7 @@ class LLMClient:
                 cfg = config.get("llm", {})
                 logger.warning(f"配置文件中未找到{config_key}，使用旧格式llm配置")
 
-            self.client = AsyncOpenAI(api_key=cfg["api_key"], base_url=cfg.get("base_url"))
+            self.client = AsyncOpenAI(api_key=cfg["api_key"], base_url=cfg.get("base_url"), timeout=600.0)
             self.model = cfg["model"]
             self.cfg_path = cfg_path
             self.model_type = model_type
@@ -114,6 +114,7 @@ class LLMClient:
                 messages=messages,  # 提示词
                 temperature=0.5,  # 随机性，0表示最 deterministic，1表示最随机
                 max_tokens=100000,  # 最大返回字符token数
+                timeout=600.0,
                 # response_format={'type': 'json_object'}  # 响应格式
             )
             content = resp.choices[0].message.content.strip()
@@ -184,22 +185,39 @@ class LLMClient:
         ]
 
         try:
+            logger.info(f"开始调用评审模型 {self.model}")
             resp = await self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 temperature=0.3,
                 max_tokens=100000,
-                # response_format={'type': 'json_object'}  # 响应格式
+                timeout=600.0
             )
+            logger.info(f"评审模型响应成功")
             content = resp.choices[0].message.content.strip()
-            print(f"评审专家输出：{content}")
+            print(f"评审专家原始输出：{content}")
+            logger.info(f"评审专家输出长度：{len(content)}")
 
             # 添加对空内容的检查
             if not content:
                 logger.error("评审专家返回空内容，请稍后再试")
                 raise RuntimeError("评审专家返回空内容，请稍后再试")
 
-            return json.loads(clean_markdown_json(content))
+            # 清理Markdown格式
+            cleaned_content = clean_markdown_json(content)
+            print(f"清理后的内容：{cleaned_content}")
+            logger.info(f"清理后的内容长度：{len(cleaned_content)}")
+
+            # 解析JSON
+            try:
+                result = json.loads(cleaned_content)
+                logger.info(f"JSON解析成功，返回{len(result)}个测试用例")
+                return result
+            except json.JSONDecodeError as e:
+                logger.error(f"JSON解析失败: {e}")
+                logger.error(f"原始内容: {content[:500]}")
+                logger.error(f"清理后内容: {cleaned_content[:500]}")
+                raise RuntimeError(f"评审专家调用失败: 返回结果不是有效的JSON格式，请稍后再试")
         except openai.APIConnectionError as e:
             logger.error(e)
             raise RuntimeError(f"评审专家调用失败: 连接错误，请检查网络设置或API地址配置")
